@@ -1,0 +1,361 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage[brazil]{babel}
+
+\sloppy
+
+\title{Avaliação Experimental do Impacto dos Governadores de Frequência da CPU no Desempenho de Aplicações CPU-Bound em Sistemas Linux}
+
+\author{Hailton de M. L. Neto\inst{1}}
+
+\address{Centro de Estudos e Sistemas Avançados de Recife School (CESAR School)\\
+  50.030-220 -- Recife -- PE -- Brazil
+  \email{hmln@cesar.school}
+}
+
+\begin{document} 
+
+\maketitle
+
+\begin{resumo} 
+  Os sistemas operacionais modernos utilizam mecanismos de escalonamento dinâmico de frequência para equilibrar desempenho e eficiência energética. No Linux, essa funcionalidade é implementada por meio dos governadores de frequência da CPU, que definem políticas para ajuste da frequência dos processadores conforme a carga de trabalho. Este trabalho investigou experimentalmente o impacto dos governadores \textit{performance} e \textit{powersave} no desempenho de aplicações CPU-bound, considerando as restrições operacionais impostas pelo driver moderno \textit{intel\_pstate}. Os experimentos foram conduzidos em ambiente Linux físico utilizando a ferramenta de benchmark Sysbench e scripts automatizados de monitoramento. Os resultados foram analisados estatisticamente por meio de testes paramétricos descritivos e inferenciais. A análise revelou que o governador \textit{performance} oferece um ganho superior a 229\% em vazão computacional e uma redução drástica de latência quando comparado ao modo \textit{powersave}, demonstrando que a escolha da política de DVFS é um fator crítico para a eficiência de processamento em cenários de alta demanda computacional.
+\end{resumo}
+
+
+\section{Introdução}
+
+O aumento contínuo da demanda por capacidade computacional tem intensificado a preocupação com o consumo energético e a eficiência operacional dos sistemas modernos. Em ambientes que vão desde dispositivos móveis até servidores e data centers, a energia consumida pelos processadores representa um fator relevante tanto do ponto de vista econômico quanto ambiental. Nesse contexto, mecanismos capazes de equilibrar desempenho computacional e eficiência energética tornaram-se objeto de interesse da indústria e da comunidade científica.
+
+Uma das principais técnicas empregadas para esse fim é o \textit{Dynamic Voltage and Frequency Scaling} (DVFS), que permite ajustar dinamicamente a frequência de operação e, em determinadas arquiteturas, a tensão de alimentação dos processadores de acordo com a carga de trabalho executada. Estudos demonstram que estratégias adequadas de DVFS podem proporcionar reduções significativas no consumo energético com impacto limitado sobre o desempenho das aplicações \cite{spiliopoulos2011, krzywda2018}.
+
+No sistema operacional Linux, o gerenciamento dinâmico da frequência da CPU é realizado por meio de políticas denominadas \textit{CPU Frequency Governors}. Esses governadores definem como e quando a frequência do processador deve ser ajustada em resposta às variações de carga do sistema. Entre os governadores mais difundidos encontram-se \textit{performance}, \textit{powersave}, \textit{ondemand} e \textit{schedutil}, cada um adotando estratégias distintas de gerenciamento de recursos computacionais.
+
+O governador \textit{performance} mantém a CPU operando continuamente em frequências elevadas, priorizando o desempenho. Em contrapartida, o governador \textit{powersave} busca reduzir o consumo energético ao manter a frequência próxima aos níveis mínimos suportados pelo hardware. Já os governadores \textit{ondemand} e \textit{schedutil} utilizam mecanismos de ajuste dinâmico, procurando equilibrar desempenho e eficiência energética de acordo com a utilização dos recursos computacionais.
+
+Diversos trabalhos demonstram que a escolha da política de gerenciamento de frequência pode impactar significativamente o comportamento do sistema. Além de influenciar o tempo de execução das aplicações, diferentes governadores podem afetar métricas relacionadas ao consumo energético, temperatura de operação e utilização dos recursos disponíveis \cite{kistowski2018, hebbar2021, zhou2023}. Pesquisas recentes também indicam que abordagens adaptativas e orientadas à carga de trabalho apresentam potencial para melhorar a eficiência energética sem comprometer significativamente o desempenho computacional \cite{spiliopoulos2011}.
+
+Apesar da ampla utilização desses mecanismos, ainda existe interesse em compreender como os governadores nativos do Linux se comportam em cenários práticos de execução. Em particular, aplicações classificadas como \textit{CPU-bound}, caracterizadas pelo uso intensivo da capacidade de processamento e baixa dependência de operações de entrada e saída, constituem um ambiente adequado para avaliar os efeitos das diferentes políticas de escalonamento de frequência.
+
+Dessa forma, este trabalho tem como objetivo analisar experimentalmente o impacto dos governadores de frequência da CPU no desempenho de aplicações CPU-bound executadas em sistemas Linux. Para isso, são comparados os governadores \textit{performance} e \textit{powersave}, disponíveis no ambiente experimental utilizado, por meio da execução de benchmarks controlados, observando métricas como a capacidade de processamento medida em eventos por segundo e a latência média de execução.
+
+A questão de pesquisa que orienta este estudo é: \textbf{como diferentes governadores de frequência da CPU influenciam o desempenho computacional de aplicações CPU-bound em sistemas Linux?}
+
+Como hipótese nula ($H_0$), assume-se que não existem diferenças estatisticamente significativas entre os resultados obtidos pelos diferentes governadores avaliados. Como hipótese alternativa ($H_1$), assume-se que existem diferenças estatisticamente significativas no desempenho das aplicações em função da política de gerenciamento de frequência utilizada.
+
+Por fim, espera-se que os resultados obtidos contribuam para uma melhor compreensão do impacto dos governadores de frequência em ambientes Linux, auxiliando pesquisadores, estudantes e administradores de sistemas na escolha de políticas adequadas para diferentes cenários de utilização.
+
+
+\section{Fundamentação Teórica} \label{sec:firstpage}
+
+\subsection{Escalonamento Dinâmico de Frequência}
+
+Os processadores modernos são projetados para equilibrar desempenho computacional e eficiência energética. Uma das principais técnicas utilizadas para atingir esse objetivo é o escalonamento dinâmico de frequência, conhecido como Dynamic Voltage and Frequency Scaling (DVFS). Essa abordagem permite que o processador ajuste dinamicamente sua frequência de operação e, em alguns casos, sua tensão de alimentação, de acordo com a carga de trabalho executada.
+
+O princípio fundamental do DVFS consiste em aumentar a frequência quando há demanda por maior desempenho e reduzi-la em períodos de baixa utilização. Dessa forma, é possível reduzir o consumo energético e a dissipação térmica sem comprometer significativamente a experiência do usuário. A adoção dessa técnica tornou-se especialmente importante em dispositivos móveis, servidores e sistemas de alto desempenho, nos quais eficiência energética e gerenciamento térmico são fatores críticos.
+
+\subsection{Modelagem Matemática do Consumo de Potência em Semicondutores}
+
+Para compreender o impacto do Escalonamento Dinâmico de Frequência e Tensão (DVFS), é indispensável analisar o comportamento termo-elétrico dos processadores modernos, construídos sob a tecnologia CMOS (\textit{Complementary Metal-Oxide-Semiconductor}). A potência total dissipada por uma CPU de silício ($P_{\text{total}}$) é a soma algébrica de dois componentes principais: a potência estática e a potência dinâmica, conforme expresso na equação:
+
+$$P_{\text{total}} = P_{\text{estática}} + P_{\text{dinâmica}}$$
+
+A potência estática ($P_{\text{estática}}$) decorre majoritariamente do efeito de corrente de fuga (\textit{leakage current}) através das portas lógicas dos transistores, um fenômeno acentuado em litografias ultrafinas de escala nanométrica. Por sua vez, a potência dinâmica ($P_{\text{dinâmica}}$) representa a energia consumida durante a comutação dos estados lógicos dos transistores ao carregar as capacitâncias parasitas dos circuitos. A potência dinâmica é modelada matematicamente pela seguinte fórmula:
+
+$$P_{\text{dinâmica}} = \alpha \cdot C \cdot V^2 \cdot f$$
+
+Onde $\alpha$ representa o fator de atividade microarquitetural, $C$ denota a capacitância física total do circuito, $V$ corresponde à tensão de alimentação operacional (\textit{core voltage}) e $f$ simboliza a frequência de operação do clock do processador.
+
+Dado que a potência dinâmica varia linearmente em relação à frequência ($f$) e de forma quadrática em relação à tensão ($V$), qualquer redução na frequência permite que o circuito opere de forma estável sob tensões elétricas menores. Consequentemente, a aplicação do DVFS sob o controle de governadores adequados propicia uma redução cúbica potencial na dissipação de potência dinâmica. 
+
+Entretanto, para cargas puramente \textit{CPU-bound}, o tempo total de execução de uma tarefa ($T$) é inversamente proporcional à frequência ($T \propto 1/f$). Assim, a energia total consumida por uma tarefa específica ($E_{\text{task}} = P \cdot T$) reduz-se de forma quadrática estritamente se houver um decréscimo concomitante em $V$. Caso a tensão permaneça constante e apenas a frequência seja reduzida, a economia de potência instantânea é anulada pelo prolongamento do tempo de execução, mantendo o consumo de energia idêntico ou superior — fenômeno que justifica a relevância do presente estudo.
+
+\subsection{Governadores de Frequência no Linux}
+
+No sistema operacional Linux, o gerenciamento da frequência dos processadores é realizado por meio de políticas denominadas CPU Governors. Cada governor implementa uma estratégia distinta para determinar quando e como a frequência da CPU deve ser ajustada em resposta às mudanças na carga de trabalho.
+
+O governor performance mantém a frequência da CPU constantemente em seu valor máximo disponível, priorizando o desempenho em detrimento do consumo energético. Por outro lado, o governor powersave opera de forma inversa, mantendo a frequência do processador próxima ao valor mínimo suportado pelo hardware. O governor ondemand ajusta dinamicamente a frequência conforme a utilização da CPU, aumentando rapidamente para o nível máximo ao detectar alta carga. Mais recentemente, o governor schedutil passou a ser adotado, utilizando informações fornecidas diretamente pelo escalonador do kernel para realizar ajustes mais eficientes e responsivos.
+
+\subsubsection{Interface cpufreq e P-States}
+
+O subsistema cpufreq do kernel Linux é responsável pelo gerenciamento das frequências de operação dos processadores. Por meio dessa interface, os governadores de frequência podem solicitar alterações nos estados de desempenho da CPU, conhecidos como Performance States (P-States).
+
+Diferente dos drivers legados como o \textit{acpi-cpufreq}, que delegavam o controle dos P-states diretamente ao software do sistema operacional gerenciando transições discretas de frequência, o driver moderno \textit{intel\_pstate} opera de forma integrada com a tecnologia \textit{Hardware P-States} (HWP) introduzida nas microarquiteturas da Intel. Sob este paradigma, o gerenciamento passa a ocorrer no modo \textit{Hardware Controlled Performance}, onde a própria CPU toma decisões autônomas de ajuste de tensão e frequência em uma granularidade de microssegundos, baseado em limites operacionais configurados pelo governador do sistema operacional. 
+
+Quando o driver \textit{intel\_pstate} opera em modo ativo (\textit{active mode}), ele disponibiliza apenas duas políticas abstratas ao espaço de usuário: \textit{performance} e \textit{powersave}. No modo \textit{performance}, o driver configura o registrador interno MSR (\textit{Model Specific Register}) de controle de energia com uma dica de desempenho máximo, instruindo o algoritmo interno da CPU a escalar a frequência para o limite máximo de Turbo Boost instantaneamente ao menor sinal de carga. No modo \textit{powersave}, o registrador é configurado para priorizar estritamente a eficiência energética, ponderando agressivamente o escalonamento ascendente e forçando o processador a operar próximo à frequência de piso do hardware sempre que possível.
+
+\subsubsection{Arquitetura Interna do Subsistema cpufreq do Kernel Linux}
+
+O gerenciamento dinâmico de frequência no sistema operacional Linux é estruturado de forma modular e hierárquica por meio do subsistema \textit{cpufreq}, integrado ao núcleo do sistema operacional. Esta arquitetura é dividida em três camadas distintas de abstração, projetadas para isolar as políticas de alto nível das implementações de hardware de baixo nível:
+
+\begin{itemize}
+\item \textbf{O Core do cpufreq:} Funciona como uma camada de abstração central que expõe uma interface padronizada para o espaço de usuário através do sistema de arquivos virtual \textit{/sys/devices/system/cpu/cpu*/cpufreq/}. Ele gerencia as notificações de eventos de transição e garante a sincronização entre múltiplos núcleos lógicos.
+\item \textbf{Os CPUfreq Governors (Governadores):} Representam os algoritmos de tomada de decisão. Eles monitoram as métricas de utilização do sistema (seja por amostragem temporal ou por telemetria direta do escalonador do kernel) e calculam a frequência ideal teórica para mitigar perdas de desempenho ou consumo.
+\item \textbf{Os CPUfreq Drivers (Drivers de Hardware):} Traduzem as requisições abstratas de frequência geradas pelos governadores em comandos físicos reais aceitos pela arquitetura do processador. Exemplos incluem o driver genérico legado \textit{acpi-cpufreq} e o driver de alta performance integrado \textit{intel\_pstate}.
+\end{itemize}
+
+\subsection{Benchmarking de Sistemas Computacionais}
+
+Benchmarking é o processo de avaliação do desempenho de sistemas computacionais por meio da execução de cargas de trabalho controladas e reproduzíveis. Essa prática é amplamente utilizada para comparar arquiteturas de hardware, sistemas operacionais, algoritmos e configurações de software. A principal finalidade de um benchmark é fornecer métricas quantitativas que permitam analisar o comportamento de um sistema sob condições específicas. Entre as métricas mais frequentemente utilizadas estão tempo de execução, throughput, utilização de recursos e latência.
+
+\subsection{Aplicações CPU-Bound}
+
+Uma aplicação CPU-bound é caracterizada por utilizar intensivamente os recursos de processamento da CPU, apresentando baixa dependência de operações de entrada e saída ou acesso à memória secundária. Nesses cenários, o desempenho do sistema está fortemente relacionado à capacidade de processamento disponível. Exemplos de aplicações CPU-bound incluem algoritmos matemáticos, compressão de dados, renderização de imagens e simulações científicas. Como essas aplicações demandam uso contínuo da CPU, tornam-se adequadas para avaliar o impacto de mecanismos de escalonamento de frequência.
+
+\subsection{Eficiência Energética e Governadores de Frequência}
+
+Além do impacto sobre o desempenho computacional, os governadores de frequência desempenham papel fundamental na eficiência energética dos sistemas modernos. O mecanismo Dynamic Voltage and Frequency Scaling (DVFS) permite ajustar dinamicamente a frequência e, em determinadas arquiteturas, a tensão de operação dos processadores, reduzindo o consumo energético durante períodos de menor demanda computacional. Diversos estudos demonstram que a escolha do governor pode influenciar significativamente o consumo de energia, a temperatura de operação e o desempenho das aplicações \cite{spiliopoulos2011, krzywda2018}.
+
+
+\section{Trabalhos Relacionados}
+
+O gerenciamento dinâmico de frequência e tensão tem sido amplamente estudado como mecanismo para equilibrar desempenho computacional e eficiência energética em sistemas modernos. No cenário delineado por \cite{spiliopoulos2011}, os autores investigaram as deficiências dos governadores tradicionais baseados em software quando confrontados com flutuações rápidas de carga. Através do desenvolvimento do framework \textit{Green Governors}, a pesquisa demonstron que o monitoramento exclusivo da utilização da CPU via estatísticas de tempo ocioso (\textit{idle time}) induz os governadores a cometer erros sistemáticos de avaliação. O trabalho focou em cargas de execução complexas utilizando simuladores de ciclo de clock, evidenciando que os atrasos inerentes à mudança de frequência no Linux geram penalidades que degradam a eficiência. A principal convergência com o presente estudo reside na constatação de que o comportamento da aplicação dita a eficácia do DVFS.
+
+Por outro lado, \cite{bao2016} direcionaram seus esforços para a complexidade introduzida por topologias multicore, nas quais diferentes núcleos compartilham o mesmo domínio de tensão e dissipação térmica (\textit{power domains}). Os autores detalharam o impacto de políticas de escalonamento que forçam frequências assimétricas entre os núcleos operacionais, constatando que aplicações do tipo \textit{CPU-bound} sofrem severas penalidades de vazão quando distribuídas de forma homogênea sob governadores conservadores. O estudo utilizou workloads científicos de alta performance, concluindo que o acoplamento do escalonador de processos com o controlador de frequência é crucial. O presente artigo complementa o escopo de \cite{bao2016} ao isolar e expor empiricamente a magnitude dessa degradação em um processador moderno de arquitetura comercial utilizando testes inferenciais rigorosos.
+
+Aprofundando os estudos sobre eficiência em larga escala, \cite{kistowski2018} mapearam o comportamento de governadores em infraestruturas de servidores corporativos de data centers, ambientes onde a eficiência energética impacta os custos operacionais diretamente. Os pesquisadores utilizaram a suíte de benchmarks \textit{SPECpower\_ssj2008} e demonstraram que os governadores padrões do Linux falham em responder adequadamente a variações abruptas de requisições web. Eles propuseram o isolamento de perfis de carga e a aplicação de governadores customizados orientados a serviços. A relevância desse trabalho para a presente pesquisa reside no estabelecimento do contraste: enquanto \cite{kistowski2018} avaliou sistemas transacionais dinâmicos, este artigo foca no limite teórico extremo de saturação determinística (estresse via fatoriais e números primos), servindo como linha de base experimental estável.
+
+A avaliação experimental conduzida por \cite{hebbar2021} analisou simultaneamente desempenho e eficiência energética utilizando benchmarks da suíte SPEC CPU. Os resultados indicaram que muitos processadores operam em frequências superiores às efetivamente necessárias em determinados cenários, ocasionando desperdício energético sem ganhos proporcionais de desempenho. Mais recentemente, \cite{zhou2023} investigaram mecanismos de gerenciamento de energia em plataformas Linux modernas. O estudo evidenciou que fatores como características do hardware, granularidade das frequências disponíveis e implementação dos drivers podem influenciar significativamente os resultados experimentais obtidos durante a avaliação dos governadores.
+
+\begin{table}[ht]
+\centering
+\caption{Resumo dos trabalhos relacionados}
+\label{tab:related}
+\begin{tabular}{|p{2.5cm}|p{1cm}|p{4cm}|p{4cm}|}
+\hline
+\textbf{Autor} & \textbf{Ano} & \textbf{Objetivo} & \textbf{Principal Resultado} \\
+\hline
+Spiliopoulos et al. & 2011 & DVFS adaptativo & Menor consumo energético. \\
+\hline
+Bao et al. & 2016 & Escalonamento multicore & Frequência adaptada à carga. \\
+\hline
+Kistowski et al. & 2018 & Governadores específicos & Maior eficiência energética. \\
+\hline
+Hebbar e Milenkovic & 2021 & Avaliação de DVFS & Redução de desperdício energético. \\
+\hline
+Zhou et al. & 2023 & Energia em Linux & Influência do hardware e drivers. \\
+\hline
+\end{tabular}
+\end{table}
+
+Nesse contexto, ainda existe espaço para investigações experimentais voltadas à avaliação dos governadores padrão do Linux em ambientes computacionais convencionais, utilizando ferramentas amplamente acessíveis e metodologias reproduzíveis. Assim, o presente trabalho busca comparar os governadores \textit{performance} e \textit{powersave} em aplicações CPU-bound, analisando seu impacto sobre o desempenho computacional por meio de benchmarks controlados e análise estatística dos resultados.
+
+
+\section{Metodologia}
+
+\subsection{Ambiente Experimental}
+
+Os experimentos foram realizados em um sistema operacional Linux configurado para permitir o controle dos governadores de frequência da CPU por meio da interface \textit{cpufreq}. Todos os testes foram executados diretamente em hardware físico, evitando interferências associadas a ambientes virtualizados e garantindo maior confiabilidade aos resultados obtidos.
+
+As especificações do ambiente experimental utilizado neste trabalho são apresentadas na Tabela \ref{tab:ambiente}. O sistema é composto por um processador Intel Core i5-1035G1 com quatro núcleos físicos e oito threads, executando o sistema operacional Linux Mint 22.2 com kernel Linux 6.14.0.
+
+\begin{table}[ht]
+\centering
+\caption{Ambiente experimental utilizado}
+\label{tab:ambiente}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Componente} & \textbf{Especificação} \\
+\hline
+Processador & Intel Core i5-1035G1 \\
+\hline
+Núcleos / Threads & 4 / 8 \\
+\hline
+Frequência & 400 MHz -- 3.60 GHz \\
+\hline
+Memória RAM & 8 GB \\
+\hline
+Sistema Operacional & Linux Mint 22.2 (Zara) \\
+\hline
+Kernel Linux & 6.14.0-37-generic \\
+\hline
+Driver de frequência & intel\_pstate \\
+\hline
+Governadores disponíveis & performance, powersave \\
+\hline
+Ferramenta de benchmark & Sysbench 1.0.20 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Caracterização Microarquitetural do Hardware}
+
+Para assegurar a reprodutibilidade dos experimentos e fundamentar a análise dos tempos de resposta, faz-se necessário detalhar a organização microarquitetural do processador Intel Core i5-1035G1 utilizado como plataforma de testes. Este componente pertence à décima geração de processadores Intel, codinome \textit{Ice Lake}, construído sob uma litografia de 10 nanômetros e baseado na microarquitetura de núcleos \textit{Sunny Cove}. 
+
+O processador dispõe de 4 núcleos físicos dotados da tecnologia \textit{Intel Hyper-Threading}, totalizando 8 núcleos lógicos (threads) reconhecidos pelo escalonador CFS (\textit{Completely Fair Scheduler}) do Linux. A hierarquia de memória cache do processador é estruturada com 32 KB de cache L1 de instruções e 48 KB de cache L1 de dados por núcleo físico, 512 KB de cache L2 unificada por núcleo e uma cache SmartCache de 6 MB compartilhada dinamicamente entre todos os núcleos lógicos ativos, mitigando gargalos de acesso à memória RAM de 8 GB DDR4.
+
+\subsection{Ferramentas Utilizadas}
+
+A seleção dos governadores de frequência foi realizada por meio da ferramenta \textit{cpupower}. Para a geração das cargas de trabalho CPU-bound foi utilizada a ferramenta \textit{Sysbench} versão 1.0.20. O benchmark empregado corresponde ao módulo de processamento de números primos, executado com oito threads e limite máximo de 20.000 números primos, configuração suficiente para gerar carga intensa sobre todos os núcleos disponíveis do processador.
+
+\subsection{Dinâmica de Execução do Benchmark Sysbench CPU}
+
+O módulo de testes de CPU da ferramenta \textit{Sysbench 1.0.20} foi selecionado devido à sua capacidade de impor estresse puramente computacional e determinístico. O benchmark opera através do cálculo sequencial de números primos por meio do método de divisão por tentativa (\textit{trial division}). Durante a execução, cada thread alocada executa repetidamente um loop que verifica a divisibilidade de inteiros consecutivos até o limite configurado de 20.000 números primos.
+
+Este algoritmo é intencionalmente estruturado para saturar as Unidades de Execução de Inteiros (ALUs) e os registradores internos do processador, gerando uma taxa desprezível de falhas de cache (\textit{cache misses}) e nenhuma operação de I/O em disco. Consequentemente, o fluxo de instruções mantém as unidades funcionais da CPU operando sem interrupções, transformando o tempo de execução em uma função direta do clock do processador e evidenciando com pureza o impacto das políticas do \textit{intel\_pstate}.
+
+\subsection{Planejamento Experimental}
+
+O objetivo dos experimentos é comparar o comportamento dos governadores de frequência nativos do Linux sob condições controladas de execução. Foram avaliados os governadores \textit{performance} e \textit{powersave}. Cada experimento foi repetido dez vezes para cada governador avaliado para posterior análise estatística. O fluxo experimental seguiu as seguintes etapas: (1) Configuração do governador via cpupower; (2) Limpeza de caches do sistema operacional; (3) Execução automatizada do benchmark; (4) Extração e armazenamento das métricas.
+
+\subsection{Scripts de Automação e Coleta}
+
+A fim de garantir a perfeita reprodutibilidade dos experimentos e eliminar erros operacionais humanos na digitação manual e transcrição sequencial dos dados, desenvolveu-se um script de automação em shell bash. O código transcreve o procedimento padronizado de limpeza de caches de memória, alteração dos parâmetros do subsistema \textit{cpufreq}, execução do benchmark \textit{Sysbench} e parsing dos resultados via expressões regulares (\textit{grep} e \textit{awk}). O script utilizado é apresentado na Listagem \ref{code:script_coleta}.
+
+\begin{figure}[ht]
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+#!/bin/bash
+# Script de Automação Experimental - DVFS vs CPU-Bound
+GOVERNORS=("performance" "powersave")
+RODADAS=10
+OUT_FILE="resultados_brutos.txt"
+
+echo "Iniciando Bateria de Testes..." > $OUT_FILE
+
+for gov in "${GOVERNORS[@]}"; do
+    echo "Configurando governador para: $gov"
+    sudo cpupower frequency-set -g $gov
+    sleep 3
+    
+    for ((i=1; i<=RODADAS; i++)); do
+        echo "Executando $gov - Rodada $i/10"
+        sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+        
+        RES=$(sysbench cpu --cpu-max-prime=20000 --threads=8 run)
+        EPS=$(echo "$RES" | grep "events per second:" | awk '{print $4}')
+        LAT=$(echo "$RES" | grep "avg:" | awk '{print $2}')
+        
+        echo "$gov;Rodada_$i;$EPS;$LAT" >> $OUT_FILE
+        sleep 2
+    done
+done
+\end{verbatim}
+\caption{Script Bash estruturado para execução automatizada e coleta dos benchmarks.}
+\label{code:script_coleta}
+\end{minipage}
+\end{figure}
+
+\subsection{Métricas Avaliadas}
+
+As métricas consideradas neste estudo foram a vazão computacional (throughput) de processamento, mensurada em eventos por segundo (events/s), e a latência média por thread (mensurada em milissegundos). Estas duas métricas caracterizam diretamente a capacidade de processamento útil do processador sob estresse contínuo.
+
+\subsection{Hipóteses e Análise Estatística}
+
+A análise dos resultados foi conduzida com base nas seguintes hipóteses:
+\begin{itemize}
+\item $H_0$: Não existem diferenças estatisticamente significativas entre as médias de vazão obtidas pelos diferentes governadores de frequência.
+\item $H_1$: Existe diferença estatisticamente significativa no desempenho entre as políticas analisadas.
+\end{itemize}
+
+Inicialmente foi realizada uma análise descritiva dos dados. Posteriormente, os resultados foram submetidos ao teste de normalidade de Shapiro-Wilk. Uma vez comprovada a normalidade, aplicou-se o Teste t de Student para duas amostras independentes (com correção de Welch para variâncias heterogêneas), utilizando um nível de significância de $\alpha = 0,05$.
+
+
+\section{Resultados e Análise}
+
+\subsection{Resultados Obtidos e Análise Descritiva}
+
+A coleta de dados seguiu estritamente o planejamento experimental estabelecido, totalizando 10 execuções consecutivas do benchmark \textit{Sysbench} para cada um dos governadores operacionais disponibilizados pelo driver \textit{intel\_pstate}: \textit{performance} e \textit{powersave}. Os dados brutos consolidados ao longo de todas as rodadas experimentais são apresentados na Tabela \ref{tab:resultados_brutos}.
+
+\begin{table}[ht]
+\centering
+\caption{Dados brutos das 10 rodadas experimentais para os governadores avaliados}
+\label{tab:resultados_brutos}
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+\textbf{} & \multicolumn{2}{c|}{\textbf{Governador Performance}} & \multicolumn{2}{c|}{\textbf{Governador Powersave}} \\ \hline
+\textbf{Rodada} & \textbf{Vazão (events/s)} & \textbf{Latência Média (ms)} & \textbf{Vazão (events/s)} & \textbf{Latência Média (ms)} \\ \hline
+1  & 3803,51 & 2,10 & 1142,15 & 6,98 \\ \hline
+2  & 3660,55 & 2,18 & 1098,42 & 7,26 \\ \hline
+3  & 3522,82 & 2,27 & 1115,30 & 7,15 \\ \hline
+4  & 3741,20 & 2,13 & 1085,11 & 7,35 \\ \hline
+5  & 3695,44 & 2,16 & 1150,88 & 6,93 \\ \hline
+6  & 3588,12 & 2,22 & 1122,45 & 7,11 \\ \hline
+7  & 3712,05 & 2,15 & 1091,37 & 7,31 \\ \hline
+8  & 3645,90 & 2,19 & 1104,66 & 7,22 \\ \hline
+9  & 3611,33 & 2,21 & 1135,19 & 7,02 \\ \hline
+10 & 3728,40 & 2,14 & 1110,02 & 7,18 \\ \hline
+\end{tabular}
+\end{table}
+
+A partir do comportamento observado nos dados brutos, realizou-se a agregação estatística descritiva para sintetizar o comportamento das distribuições. A Tabela \ref{tab:estatistica_descritiva} sumariza a média aritmética, a mediana, o desvio padrão e o Coeficiente de Variação (CV) obtidos para ambos os cenários.
+
+\begin{table}[ht]
+\centering
+\caption{Consolidação estatística descritiva do desempenho}
+\label{tab:estatistica_descritiva}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Métrica / Governador} & \textbf{Média} & \textbf{Mediana} & \textbf{Desvio Padrão} & \textbf{CV (\%)} \\ \hline
+\textbf{Performance (events/s)}    & 3670,93 & 3677,99 & 83,54 & 2,27\% \\ \hline
+\textbf{Powersave (events/s)}      & 1115,56 & 1112,66 & 21,78 & 1,95\% \\ \hline
+\textbf{Performance Latência (ms)} & 2,17    & 2,17    & 0,05  & 2,30\% \\ \hline
+\textbf{Powersave Latência (ms)}   & 7,15    & 7,16    & 0,13  & 1,82\% \\ \hline
+\end{tabular}
+\end{table}
+
+A análise inicial dos parâmetros descritivos revela uma disparidade acentuada entre as duas políticas de gerenciamento de frequência. O governador \textit{performance} sustentou uma taxa média de processamento de 3670,93 eventos por segundo, enquanto o governador \textit{powersave} estabilizou-se em 1115,56 eventos por segundo, representando um decréscimo drástico de aproximadamente 69,61\% na vazão computacional da aplicação CPU-bound. 
+
+No que tange à latência, o comportamento inverso e proporcional confirma o impacto: o modo de economia energética (\textit{powersave}) elevou o tempo médio de resposta das threads para 7,15 ms, um incremento de 229,49\% em comparação aos estáveis 2,17 ms registrados sob a política de máximo desempenho. O Coeficiente de Variação permaneceu abaixo de 2,5\%, atestando o correto isolamento do ambiente físico de testes.
+
+\subsection{Análise Comparativa}
+
+Os resultados experimentais demonstram de forma inequívoca que o comportamento do sistema é moldado de maneira agressiva pelas diretrizes estabelecidas pelo governador ativo. Diferente de cenários com restrições de I/O, onde as CPUs passam períodos ociosos aguardando transferências de dados de periféricos externos, as cargas de processamento geradas pelo cálculo de números primos mantêm as pipelines lógicas de execução ocupadas durante 100\% do tempo alocado. 
+
+Sob a vigência do governador \textit{performance}, observou-se que o driver de frequência impõe uma política agressiva de elevação dos clocks a fim de responder à atividade intensa das threads do Sysbench. Esse comportamento contrasta radicalmente com o governador \textit{powersave}, que forçou os núcleos a operar de forma restrita, reduzindo a frequência média e consequentemente limitando a taxa global de entrega de resultados do benchmark, validando de forma prática o impacto direto dos mecanismos de DVFS sobre o tempo de processamento útil do sistema operacional Linux.
+
+\subsection{Análise Estatística Inferencial}
+
+Para validar as hipóteses levantadas na seção metodológica, os dados foram submetidos inicialmente ao teste de normalidade de Shapiro-Wilk através do ambiente computacional R. Para o grupo \textit{performance}, o teste resultou em um $W = 0,941$ com um $p\text{-value} = 0,563$. Para o grupo \textit{powersave}, obteve-se $W = 0,962$ com $p\text{-value} = 0,811$. Dado que ambos os valores de $p$ superam o nível de significância adotado de $\alpha = 0,05$, não se rejeita a hipótese nula de normalidade, confirmando que os dados seguem uma distribuição gaussiana.
+
+Prosseguindo com a análise paramétrica, aplicou-se o Teste t de Student para duas amostras independentes com variâncias heterogêneas (conforme verificado pelo teste F de Fisher, onde $F = 14,71$ e $p\text{-value} < 0,001$). O teste estatístico inferencial buscou avaliar a robustez da rejeição da hipótese nula ($H_0$), a qual afirmava a equivalência de desempenho entre os governadores.
+
+Os resultados obtidos através do Teste t revelaram uma estatística calculada $t = 92,45$ para os dados de vazão (events/s), com graus de liberdade corrigidos por Welch iguais a $10,24$. O valor p gerado foi de $p < 0,0001$. Sendo o $p\text{-value}$ drasticamente inferior ao limite crítico de $\alpha = 0,05$, \textbf{rejeita-se categoricamente a hipótese nula ($H_0$)} em favor da hipótese alternativa ($H_1$). 
+
+Conclui-se, com $95\%$ de confiança estatística, que a escolha do governador de frequência da CPU exerce um impacto massivo e altamente significativo sobre o desempenho de aplicações CPU-bound. No caso específico do hardware avaliado sob a interface do driver \textit{intel\_pstate}, o governador \textit{performance} entregou uma taxa de processamento médio $229,06\%$ superior ao governador \textit{powersave}, reduzindo concomitantemente a latência de processamento em cerca de $69,65\%$.
+
+\subsection{Formulação Matemática do Teste t de Student de Welch}
+
+Dada a natureza heterogênea das variâncias registradas nos dois grupos experimentais, a comparação inferencial das médias de vazão exigiu a aplicação do Teste t de Student de Welch. Esta variante estatística modifica o cálculo convencional do erro padrão para acomodar amostras com dispersões distintas sem comprometer o nível de significância $\alpha$. A estatística de teste $t$ é computada por meio da seguinte formulação matemática:
+
+$$t = \frac{\bar{X}_1 - \bar{X}_2}{\sqrt{\frac{s_1^2}{n_1} + \frac{s_2^2}{n_2}}}$$
+
+Onde $\bar{X}_1$ e $\bar{X}_2$ representam as médias aritméticas amostrais da vazão computacional obtidas sob a vigência dos governadores \textit{performance} e \textit{powersave}, respectivamente; $s_1^2$ e $s_2^2$ correspondem às suas respectivas variâncias amostrais recalculadas; enquanto $n_1$ e $n_2$ indicam o tamanho de cada grupo de amostras ($n_1 = n_2 = 10$).
+
+Devido à heterocedasticidade dos dados brutos, os graus de liberdade efetivos ($\nu$) devem ser estimados matematicamente através da equação de Welch-Satterthwaite:
+
+$$\nu = \frac{\left( \frac{s_1^2}{n_1} + \frac{s_2^2}{n_2} \right)^2}{\frac{\left(\frac{s_1^2}{n_1}\right)^2}{n_1 - 1} + \frac{\left(\frac{s_2^2}{n_2}\right)^2}{n_2 - 1}}$$
+
+Substituindo os valores empíricos consolidados nesta modelagem, os cálculos estatísticos inferenciais convergiram para o valor exato de $\nu = 10,24$ graus de liberdade. A magnitude resultante da estatística calculada ($t = 92,45$) posiciona-se em uma região crítica de rejeição com p-valor infinitesimal ($p < 0,0001$), fornecendo sustentação matemática incontestável para invalidar a hipótese nula $H_0$.
+
+\subsection{Limitações do Estudo}
+
+A principal limitação deste estudo reside nas restrições arquiteturais impostas pelo driver de gerenciamento de energia do hardware utilizado. O driver \textit{intel\_pstate}, operando em modo ativo no processador Intel Core i5, desativa o controle clássico de governadores baseado em software do kernel, disponibilizando estritamente o binômio operacional \textit{performance} e \textit{powersave}. Por consequência, não foi possível avaliar empiricamente os governadores \textit{ondemand} e \textit{schedutil} neste ambiente específico. Adicionalmente, a carga de trabalho avaliada concentrou-se exclusivamente em um cenário sintético puramente \textit{CPU-bound}, requerendo cautela ao estender as conclusões para sistemas com perfis de execução heterogêneos ou alta concorrência de operações de entrada e saída (I/O).
+
+
+\section{Discussão}
+
+Os resultados experimentais revelam o impacto severo que as políticas de escalonamento dinâmico de frequência (DVFS) exercem sobre o tempo de resposta e a vazão de processamento. A convergência dos dados coletados com a literatura clássica \cite{spiliopoulos2011, hebbar2021} corrobora a premissa de que aplicações com uso intensivo de CPU demandam a eliminação de latências de transição de estado de energia para operar em eficiência máxima.
+
+O desempenho superior do governador \textit{performance} (3670,93 events/s) justifica-se pelo fato de o driver instruir o microcódigo do processador a manter os núcleos permanentemente no teto dinâmico de frequência (frequência de Turbo Boost). Como a carga do \textit{Sysbench} mantém as pipelines lógicas saturadas, não há períodos de ociosidade, o que mitiga a penalidade física de transição de clock e tensão — o atraso necessário para a estabilização dos loops de calibração de fase (PLL) no silício.
+
+Por outro lado, o comportamento do governador \textit{powersave}, que degradou a vazão para 1115,56 events/s, evidencia a postura conservadora do algoritmo da Intel quando a prioridade é a eficiência energética. Em cargas de trabalho classificadas como \textit{I/O-bound} ou \textit{Memory-bound}, onde o processador passa longos períodos esperando a resposta de periféricos ou barramentos de memória, a política de manter clocks reduzidos gera excelente economia de energia com perdas marginais de desempenho. No entanto, para o cálculo massivo de números primos, limitar artificialmente a frequência de operação apenas prolonga o tempo de execução da tarefa, o que pode inclusive aumentar o consumo total de energia por tarefa (\textit{Energy-per-Task}), contrariando o propósito original do governador.
+
+Outro ponto crítico evidenciado pela discussão reside na impossibilidade técnica de chaveamento para os governadores \textit{ondemand} e \textit{schedutil} nativos durante a execução. Isso ocorre devido ao fato de que o kernel Linux moderno desativa automaticamente esses governadores quando o driver genérico \textit{acpi-cpufreq} é substituído pelo driver proprietário da Intel. Como o \textit{schedutil} depende diretamente do rastreamento de utilização de capacidade computacional feito pelo escalonador do kernel Linux, a delegação dessa inteligência para o microcódigo interno do processador (HWP) desativa o funcionamento do \textit{schedutil}, limitando o escopo de atuação do administrador do sistema ao binômio \textit{performance/powersave}.
+
+
+\section{Conclusão}
+
+Este trabalho apresentou uma avaliação experimental do impacto dos governadores de frequência da CPU no desempenho de aplicações \textit{CPU-bound} em ambiente Linux. Diante das transformações nos drivers de gerenciamento modernos, o estudo concentrou-se na análise do binômio \textit{performance} e \textit{powersave} sob o driver \textit{intel\_pstate}. 
+
+A metodologia aplicada envolveu a automação de testes via scripts em shell e a aplicação de tratamento estatístico inferencial. A execução do Teste t de Student com correção de Welch permitiu rejeitar categoricamente a hipótese nula ($H_0$), comprovando com 95\% de confiança que a escolha da política de gerenciamento de frequência altera de forma massiva a capacidade de processamento do sistema. O modo \textit{performance} entregou uma vazão 229,06\% superior e uma latência 69,65\% menor em comparação ao modo \textit{powersave}.
+
+Como limitações, destaca-se o uso de uma única arquitetura de hardware e de um benchmark sintético isolado, impedindo a generalização dos resultados para outros perfis de carga. Para trabalhos futuros, recomenda-se a expansão da pesquisa através da medição direta do consumo de potência em Watts via interface MSR/RAPL (\textit{Running Average Power Limit}), possibilitando calcular o balanço real de eficiência energética. Sugere-se também a inclusão de testes com servidores web e de banco de dados para mapear o comportamento sob cargas de trabalho reais e heterogêneas.
+
+\bibliographystyle{sbc}
+\bibliography{sbc-template}
+
+\end{document}

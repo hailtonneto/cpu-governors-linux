@@ -1,0 +1,340 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+% =====================================================================
+% TEMPLATE DE APRESENTAÇÃO DE ARTIGO CIENTÍFICO
+% SSCAD 2026 -- Simpósio em Sistemas Computacionais de Alto Desempenho
+% Programação Imperativa e Funcional / CESAR School
+% Prof. Ronierison Maciel
+% =====================================================================
+
+% =====================================================================
+% TEMA E APARÊNCIA
+% =====================================================================
+\usetheme{Madrid}
+\usecolortheme{whale}
+
+% =====================================================================
+% CODIFICAÇÃO E IDIOMA
+% =====================================================================
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+
+% =====================================================================
+% PACOTES GERAIS
+% =====================================================================
+\usepackage{graphicx}     % inserir imagens
+\usepackage{booktabs}     % tabelas bonitas
+\usepackage{hyperref}     % links clicáveis
+\usepackage{xcolor}       % cores
+\usepackage{listings}     % blocos de código
+\usepackage{multicol}     % múltiplas colunas
+\usepackage{amsmath}      % fórmulas matemáticas
+\usepackage{amssymb}      % símbolos matemáticos extras
+
+% =====================================================================
+% INFORMAÇÕES DA APRESENTAÇÃO
+% =====================================================================
+\title[Governadores Linux]{Análise do Impacto dos Governadores de Frequência da CPU no Desempenho de Aplicações CPU-Bound em Sistemas Linux}
+
+\subtitle{Artigo Científico Individual}
+
+\author[Hailton Neto]{Hailton de Melo Lima Neto}
+
+\institute[CESAR School]{
+CESAR School \\
+Análise e Desenvolvimento de Sistemas \\
+\small Professor: Ronierison Maciel
+}
+
+\date{16 de Junho de 2026}
+
+% =====================================================================
+% PALETA DE CORES
+% =====================================================================
+\definecolor{primaryColor}{HTML}{FF6002}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\setbeamercolor{titlelike}{bg=primaryColor, fg=white}
+\setbeamercolor{structure}{fg=primaryColor}
+\setbeamertemplate{caption}[numbered] 
+
+% =====================================================================
+% ESTILO PARA CÓDIGO (BASH MOLDADO PARA O SEU SCRIPT)
+% =====================================================================
+\lstdefinestyle{bashstyle}{
+    language=bash,
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen}\itshape,
+    keywordstyle=\color{primaryColor}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\tiny,
+    breaklines=true,
+    numbers=left,
+    numbersep=5pt,
+    tabsize=2,
+    showstringspaces=false
+}
+\lstset{style=bashstyle}
+
+% =====================================================================
+\begin{document}
+
+% ---------------------------------------------------------------------
+% SLIDE DE TÍTULO
+% ---------------------------------------------------------------------
+\frame{\titlepage}
+
+% ---------------------------------------------------------------------
+% SUMÁRIO
+% ---------------------------------------------------------------------
+\begin{frame}{Roteiro}
+    \tableofcontents
+\end{frame}
+
+
+% =====================================================================
+\section{Introdução}
+% =====================================================================
+
+\begin{frame}{Contextualização}
+    \begin{itemize}
+        \item Processadores modernos utilizam mecanismos de gerenciamento dinâmico de frequência para equilibrar desempenho e consumo energético.
+        \item No Linux, esse gerenciamento é realizado por políticas chamadas \textit{CPU Frequency Governors}.
+        \item O advento de drivers modernos como o \textit{intel\_pstate} alterou o paradigma tradicional, movendo o controle para o microcódigo do hardware (HWP).
+        \item Compreender esse impacto em cargas estáveis é vital para a otimização de ambientes HPC de alto desempenho.
+    \end{itemize}
+    
+    \begin{block}{Problema de pesquisa}
+    Como os diferentes governadores de frequência da CPU influenciam o desempenho de aplicações \textit{CPU-bound} em sistemas Linux sob as restrições de drivers modernos?
+    \end{block}
+\end{frame}
+
+\begin{frame}{Objetivos}
+    \textbf{Objetivo Geral:} Avaliar experimentalmente o impacto dos governadores de frequência da CPU no desempenho de aplicações \textit{CPU-bound} executadas em sistemas Linux.
+    
+    \vspace{0.5cm}
+    
+    \textbf{Objetivos Específicos}
+    
+    \begin{enumerate}
+        \item Estudar os fundamentos matemáticos e físicos do mecanismo DVFS e o comportamento do subsistema \textit{cpufreq} do kernel.
+        \item Investigar as limitações arquiteturais impostas pelo driver ativo \textit{intel\_pstate}.
+        \item Analisar de forma estatisticamente inferencial (Teste t de Welch) os efeitos do binômio operacional \textit{performance} e \textit{powersave} sobre a vazão e a latência.
+    \end{enumerate}
+\end{frame}
+
+
+% =====================================================================
+\section{Fundamentação Teórica}
+% =====================================================================
+
+\begin{frame}{Modelagem Matemática do Consumo de Potência}
+    A dissipação termo-elétrica em circuitos digitais CMOS é dividida em estática e dinâmica ($P_{\text{total}} = P_{\text{estática}} + P_{\text{dinâmica}}$). O componente dinâmico é modelado por:
+    
+    \begin{equation}
+        P_{\text{dinâmica}} = \alpha \cdot C \cdot V^2 \cdot f
+        \label{eq:potencia}
+    \end{equation}
+    Onde $\alpha$ é o fator de atividade microarquitetural, $C$ é a capacitância, $V$ representa a tensão e $f$ a frequência de operação.
+
+    \begin{block}{A Relação Crítica para Cargas CPU-Bound}
+        Como a redução de frequência diminui linearmente a potência instantânea, mas estende linearmente o tempo de execução da tarefa ($T \propto 1/f$), a economia energética real ($E_{\text{task}} = P \cdot T$) só se consolida se houver redução quadrática da tensão ($V$). Reduzir apenas a frequência sem decréscimo de tensão degrada o desempenho sem poupar energia.
+    \end{block}
+\end{frame}
+
+\begin{frame}{O Ecossistema cpufreq do Linux e o Driver intel\_pstate}
+    O subsistema \textit{cpufreq} é composto de três camadas: o \textit{Core}, os \textit{Governors} (algoritmos) e os \textit{Drivers} (comunicação física).
+
+    \vspace{0.3cm}
+    \textbf{A Mudança de Paradigma do intel\_pstate:}
+    \begin{itemize}
+        \item Substitui o controle discreto de software por estados de desempenho controlados por hardware (\textit{Hardware Controlled Performance - HWP}).
+        \item Opera em Modo Ativo desativando os governadores \textit{ondemand} e \textit{schedutil}.
+        \item Restringe o espaço de usuário ao binômio abstrato: \textbf{Performance} (força limites do Turbo Boost via registradores MSR) e \textbf{Powersave} (prioriza estritamente o piso de consumo do silício).
+    \end{itemize}
+\end{frame}
+
+
+% =====================================================================
+\section{Metodologia}
+% =====================================================================
+
+\begin{frame}{Configuração do Ambiente Experimental}
+    \begin{columns}[T]
+        \column{0.48\textwidth}
+        \begin{block}{Hardware (Ambiente Físico)}
+            \begin{itemize}
+                \item \textbf{CPU:} Intel Core i5-1035G1 (Ice Lake)
+                \item \textbf{Litografia:} 10 nm (Sunny Cove)
+                \item \textbf{Arquitetura:} 4 Cores / 8 Threads
+                \item \textbf{Frequência:} 400 MHz a 3.60 GHz
+                \item \textbf{Cache L3:} 6 MB SmartCache shared
+                \item \textbf{Memória:} 8 GB RAM DDR4
+            \end{itemize}
+        \end{block}
+
+        \column{0.48\textwidth}
+        \begin{block}{Software e Carga}
+            \begin{itemize}
+                \item \textbf{OS:} Linux Mint 22.2 (Kernel 6.14.0)
+                \item \textbf{Driver:} \textit{intel\_pstate} (Modo Ativo)
+                \item \textbf{Benchmark:} Sysbench 1.0.20
+                \item \textbf{Carga do Custo:} Cálculo sequencial de 20.000 números primos via divisão por tentativa.
+                \item \textbf{Paralelismo:} 8 threads paralelas saturando as ALUs inteiras de forma contínua.
+            \end{itemize}
+        \end{block}
+    \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Automação do Experimento e Coleta}
+    Para mitigar o erro operacional, foi desenvolvido um script \textit{Bash} estruturado para limpar caches, alterar governadores e exportar os dados via expressões regulares.
+
+    \begin{lstlisting}[caption=Script de Automação Utilizado para Isolar e Coletar os Dados]
+#!/bin/bash
+GOVERNORS=("performance" "powersave")
+RODADAS=10
+OUT_FILE="resultados_brutos.txt"
+for gov in "${GOVERNORS[@]}"; do
+    sudo cpupower frequency-set -g $gov && sleep 3
+    for ((i=1; i<=RODADAS; i++)); do
+        sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+        RES=$(sysbench cpu --cpu-max-prime=20000 --threads=8 run)
+        EPS=$(echo "$RES" | grep "events per second:" | awk '{print $4}')
+        LAT=$(echo "$RES" | grep "avg:" | awk '{print $2}')
+        echo "$gov;Rodada_$i;$EPS;$LAT" >> $OUT_FILE
+        sleep 2
+    done
+done
+    \end{lstlisting}
+\end{frame}
+
+\begin{frame}{Tratamento Estatístico: Formulação de Welch}
+    Devido à variabilidade heterogênea inerente aos diferentes estados energéticos de hardware, adotou-se o \textbf{Teste t de Student de Welch}.
+
+    \vspace{0.2cm}
+    \textbf{Estatística de Teste $t$:}
+    \begin{equation}
+        t = \frac{\bar{X}_1 - \bar{X}_2}{\sqrt{\frac{s_1^2}{n_1} + \frac{s_2^2}{n_2}}}
+    \end{equation}
+
+    \textbf{Graus de Liberdade Efetivos ($\nu$) por Welch-Satterthwaite:}
+    \begin{equation}
+        \nu = \frac{\left( \frac{s_1^2}{n_1} + \frac{s_2^2}{n_2} \right)^2}{\frac{\left(\frac{s_1^2}{n_1}\right)^2}{n_1 - 1} + \frac{\left(\frac{s_2^2}{n_2}\right)^2}{n_2 - 1}}
+    \end{equation}
+\end{frame}
+
+
+% =====================================================================
+\section{Resultados e Análise}
+% =====================================================================
+
+\begin{frame}{Análise Descritiva Consolidadada}
+    Os dados sumarizados a partir das 20 rodadas experimentais evidenciam uma disparidade macroscópica de entrega computacional sob as duas diretivas de energia.
+
+    \begin{table}
+        \centering
+        \caption{Métricas consolidadas de Vazão e Latência (10 execuções por grupo)}
+        \label{tab:resultados_reais}
+        \begin{tabular}{lcccc}
+            \toprule
+            \textbf{Métrica / Governador} & \textbf{Média} & \textbf{Mediana} & \textbf{Desvio Padrão} & \textbf{CV (\%)} \\
+            \midrule
+            Performance (events/s)    & 3670,93 & 3677,99 & 83,54 & 2,27\% \\
+            Powersave (events/s)      & 1115,56 & 1112,66 & 21,78 & 1,95\% \\
+            \midrule
+            Performance Latência (ms) & 2,17    & 2,17    & 0,05  & 2,30\% \\
+            Powersave Latência (ms)   & 7,15    & 7,16    & 0,13  & 1,82\% \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+    \footnotesize
+    O baixo Coeficiente de Variação ($CV < 2,5\%$) comprova a robustez e estabilidade térmica do ambiente físico.
+\end{frame}
+
+\begin{frame}{Resultados da Validação Inferencial e Discussão}
+    \begin{columns}[T]
+        \column{0.48\textwidth}
+        \begin{block}{Ganhos Quantificáveis}
+            \begin{itemize}
+                \item \textbf{Vazão Computacional:} O modo \textit{performance} obteve uma taxa \textbf{229,06\% superior} ao \textit{powersave}.
+                \item \textbf{Latência das Threads:} Redução concomitante de \textbf{69,65\%} no tempo de resposta médio.
+            \end{itemize}
+        \end{block}
+
+        \begin{alertblock}{Validação Estatística}
+            \begin{itemize}
+                \item Teste de Shapiro-Wilk confirmou a normalidade dos dados ($p > 0,05$).
+                \item Teste t de Welch resultou em $t = 92,45$, $\nu = 10,24$ e um \textbf{$p\text{-valor} < 0,0001$}.
+                \item \textbf{Conclusão:} Rejeita-se categoricamente a hipótese nula ($H_0$).
+            \end{itemize}
+        \end{alertblock}
+
+        \column{0.48\textwidth}
+        \begin{block}{Interpretação Microarquitetural}
+            Cargas de estresse \textit{CPU-bound} estagnam as ALUs e eliminam tempos ociosos. 
+            
+            \vspace{0.2cm}
+            O modo \textit{performance} instrui o silício a estabilizar os loops de calibração de fase (PLL) no teto físico de frequência (Turbo Boost). O \textit{powersave} tenta limitar artificialmente o clock, o que estende drasticamente a duração do estresse e eleva o consumo energético consolidado por tarefa (\textit{Energy-per-Task}).
+        \end{block}
+    \end{columns}
+\end{frame}
+
+
+% =====================================================================
+\section{Conclusão}
+% =====================================================================
+
+\begin{frame}{Considerações Finais}
+    \begin{itemize}
+        \item \textbf{Resposta à pergunta de pesquisa:} A escolha do governador de frequência não apenas altera, mas remodela a vazão do sistema Linux sob workloads intensivos.
+        \item \textbf{Contribuição Principal:} O isolamento e mapeamento quantitativo das restrições do driver \textit{intel\_pstate}, desmistificando o comportamento energético sobre cargas puramente de processamento de inteiros.
+        \item \textbf{Limitações do Estudo:} Análise realizada em arquitetura unificada de hardware e focada unicamente em cargas sintéticas homogêneas.
+        \item \textbf{Trabalhos Futuros:}
+        \begin{itemize}
+            \item Medição direta da potência instantânea em Watts via interfaces físicas MSR/RAPL (\textit{Running Average Power Limit}).
+            \item Expansão dos testes para cenários transacionais e workloads dinâmicos mistos (\textit{I/O-bound}).
+        \end{itemize}
+    \end{itemize}
+
+    \begin{block}{Mensagem para levar para casa}
+        Em cenários puramente \textit{CPU-bound}, o uso do governador \textit{powersave} degrada a vazão em mais de 69\% e, ao estender o tempo total de execução, compromete a própria eficiência energética que propõe salvar.
+    \end{block}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% REFERÊNCIAS REAIS DO SEU ARTIGO
+% ---------------------------------------------------------------------
+\begin{frame}[allowframebreaks]{Referências}
+    \footnotesize
+    \begin{thebibliography}{9}
+        \bibitem{spiliopoulos2011}
+        SPILIOPOULOS, V.; KAXIRAS, S.; STEFANIDIS, G. Green Governors: A framework for Dynamic Voltage and Frequency Scaling in modern processors. \textit{International Conference on Energy-Aware High Performance Computing}, 2011.
+
+        \bibitem{bao2016}
+        BAO, M.; MELHEM, R.; MOSSE, D. Coordinated multi-core frequency scaling for CPU-bound scientific workloads. \textit{IEEE International Conference on Cluster Computing}, p. 142--151, 2016.
+
+        \bibitem{kistowski2018}
+        KISTOWSKI, J. v.; HANCKMANN, H.; KOUNEV, S. Analysis of CPU frequency governors for energy-efficient data center services. \textit{Sustainable Computing: Informatics and Systems}, v. 19, p. 88--101, 2018.
+
+        \bibitem{hebbar2021}
+        HEBBAR, A.; MILENKOVIC, A. Empirical evaluation of DVFS efficiency in desktop and server processors. \textit{ACM Transactions on Modeling and Performance Evaluation of Computing Systems}, 2021.
+    \end{thebibliography}
+\end{frame}
+
+% ---------------------------------------------------------------------
+% SLIDE DE ENCERRAMENTO
+% ---------------------------------------------------------------------
+\begin{frame}
+    \begin{center}
+        {\Huge \textbf{Obrigado!}} \\[1em]
+        {\large Perguntas e Discussões?} \\[1.5em]
+        \small Contato: \url{hmln@cesar.school}
+    \end{center}
+\end{frame}
+
+\end{document}

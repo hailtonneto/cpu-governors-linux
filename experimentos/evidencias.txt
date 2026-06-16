@@ -1,0 +1,150 @@
+====================================================
+AMBIENTE EXPERIMENTAL
+====================================================
+
+Sistema Operacional:
+Linux Mint 22.2 (Zara)
+
+Kernel:
+6.14.0-37-generic
+
+====================================================
+INFORMAÇÕES DO PROCESSADOR
+====================================================
+
+Modelo:
+Intel(R) Core(TM) i5-1035G1 CPU @ 1.00GHz
+
+Núcleos físicos:
+4
+
+Threads:
+8
+
+Frequência mínima:
+400 MHz
+
+Frequência máxima:
+3.60 GHz
+
+Cache L3:
+6 MB
+
+====================================================
+GERENCIAMENTO DE FREQUÊNCIA
+====================================================
+
+Driver cpufreq:
+intel_pstate
+
+Governadores disponíveis:
+performance
+powersave
+
+Governor ativo durante a coleta:
+powersave
+
+Boost:
+Suportado: Sim
+Ativo: Sim
+
+====================================================
+MEMÓRIA RAM
+====================================================
+
+Total:
+7.4 GiB
+
+Disponível:
+2.1 GiB
+
+Swap:
+2.0 GiB
+
+====================================================
+BENCHMARK UTILIZADO
+====================================================
+
+Ferramenta:
+Sysbench 1.0.20
+
+Comando:
+
+sysbench cpu --threads=8 --cpu-max-prime=20000 run
+
+====================================================
+RESULTADOS - EXECUÇÃO 1
+====================================================
+
+Events per second:
+3803.51
+
+Tempo total:
+10.0013 s
+
+Latência média:
+2.10 ms
+
+Latência máxima:
+45.66 ms
+
+====================================================
+RESULTADOS - EXECUÇÃO 2
+====================================================
+
+Events per second:
+3660.55
+
+Tempo total:
+10.0014 s
+
+Latência média:
+2.18 ms
+
+Latência máxima:
+77.12 ms
+
+====================================================
+RESULTADOS - EXECUÇÃO 3
+====================================================
+
+Events per second:
+3522.82
+
+Tempo total:
+10.0014 s
+
+Latência média:
+2.27 ms
+
+Latência máxima:
+267.24 ms
+
+====================================================
+ESTATÍSTICAS GERAIS
+====================================================
+
+Média de Events/s:
+3662.29
+
+Menor valor:
+3522.82
+
+Maior valor:
+3803.51
+
+Latência média geral:
+2.18 ms
+
+====================================================
+OBSERVAÇÕES
+====================================================
+
+O processador utiliza o driver Intel P-State.
+
+Durante a execução dos experimentos foram identificados apenas
+os governadores "performance" e "powersave" como disponíveis.
+
+As execuções realizadas tiveram como objetivo validar o ambiente
+experimental e verificar a estabilidade dos resultados obtidos
+com o benchmark Sysbench.
